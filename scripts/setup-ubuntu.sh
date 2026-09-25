@@ -55,8 +55,8 @@ apt-get install -y nodejs
 
 echo "    node=$(node -v)  npm=$(npm -v)"
 
-echo "==> npm install (hardSlice deps)…"
-npm install --omit=dev
+echo "==> npm install (hardSlice deps, including tsx)…"
+npm install
 
 if [[ "$SKIP_UFW" != "1" ]]; then
   echo "==> Firewall + UDP buffers…"
