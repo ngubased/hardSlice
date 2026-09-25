@@ -44,23 +44,68 @@ export function startUdpListener(
   let expected: bigint | null = null;
   let gaps = 0;
   let ok = 0;
+  let rawPackets = 0;
+  let lastHeartbeat = Date.now();
+  let okSinceHeartbeat = 0;
+  let waitingLogged = false;
+
+  // If nothing arrives for a while, remind that stream/firewall may be wrong
+  const waitTimer = setInterval(() => {
+    if (ok > 0) return;
+    if (!waitingLogged) {
+      console.warn(
+        `[udp] still waiting for shredstream on :${port} — check dashboard IP/port + cloud SG`,
+      );
+      waitingLogged = true;
+    }
+  }, 15_000);
+  waitTimer.unref?.();
 
   sock.on("message", (msg) => {
+    rawPackets += 1;
     const parsed = parseDecodedDatagram(msg);
-    if (!parsed) return;
+    if (!parsed) {
+      if (rawPackets === 1 || rawPackets % 1000 === 0) {
+        console.warn(
+          `[udp] got ${rawPackets} datagram(s) but decode failed (wrong format?)`,
+        );
+      }
+      return;
+    }
     if (expected !== null && parsed.seq !== expected) {
       gaps += Number(parsed.seq - expected);
-      if (gaps % 100 === 1) {
+      if (gaps === 1 || gaps % 100 === 0) {
         console.warn(
-          `[udp] seq gap — lost≈${gaps} total (last expected ${expected}, got ${parsed.seq})`,
+          `[udp] seq gap — lost≈${gaps} total (expected ${expected}, got ${parsed.seq})`,
         );
       }
     }
     expected = parsed.seq + 1n;
     ok += 1;
-    if (ok % 5000 === 0) {
-      console.log(`[udp] decoded ${ok} txs · gaps≈${gaps} · slot=${parsed.slot}`);
+    okSinceHeartbeat += 1;
+
+    if (ok === 1) {
+      console.log(
+        `[udp] first decoded tx · slot=${parsed.slot} · seq=${parsed.seq} — stream is alive`,
+      );
+    } else if (ok === 10 || ok === 100 || ok === 1000 || ok % 5000 === 0) {
+      console.log(
+        `[udp] decoded ${ok} txs · gaps≈${gaps} · slot=${parsed.slot}`,
+      );
     }
+
+    const now = Date.now();
+    if (now - lastHeartbeat >= 10_000) {
+      const perSec = (okSinceHeartbeat / ((now - lastHeartbeat) / 1000)).toFixed(
+        1,
+      );
+      console.log(
+        `[udp] heartbeat · ${perSec} tx/s · total=${ok} · gaps≈${gaps} · slot=${parsed.slot}`,
+      );
+      lastHeartbeat = now;
+      okSinceHeartbeat = 0;
+    }
+
     try {
       onTx(parsed);
     } catch (err) {
@@ -79,7 +124,7 @@ export function startUdpListener(
     }
     const addr = sock.address();
     console.log(
-      `[udp] listening 0.0.0.0:${typeof addr === "object" ? addr.port : port}`,
+      `[udp] listening 0.0.0.0:${typeof addr === "object" ? addr.port : port} — waiting for shredstream…`,
     );
   });
 

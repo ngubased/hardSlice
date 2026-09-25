@@ -32,6 +32,8 @@ const PUMP_ALT =
   "7mFD2mUtRS65XstiSAvCJuYmdesZoQwCwRJhq1p3eRMe";
 
 let pumpAlt: AddressLookupTableAccount | null = null;
+let lastMcLog = 0;
+let lastMcLogged = -1;
 
 /** Cold path — load Pump ALT once so v0 txs resolve mint/user keys. */
 export async function warmPumpAlt(connection?: Connection): Promise<void> {
@@ -57,6 +59,10 @@ function discEq(data: Uint8Array, disc: Buffer): boolean {
 function readU64LE(data: Uint8Array, offset: number): BN {
   const buf = Buffer.from(data.subarray(offset, offset + 8));
   return new BN(buf, "le");
+}
+
+function short(addr: string): string {
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
 }
 
 function resolveAccountKeys(tx: VersionedTransaction): PublicKey[] {
@@ -89,6 +95,7 @@ export function handleShredTx(tx: VersionedTransaction, slot: bigint): void {
   const keys = resolveAccountKeys(tx);
   const pumpStr = PUMP_PROGRAM_ID.toBase58();
   const mintStr = live.mintStr;
+  let touchedMint = false;
 
   for (const ix of tx.message.compiledInstructions) {
     const program = keys[ix.programIdIndex];
@@ -101,7 +108,10 @@ export function handleShredTx(tx: VersionedTransaction, slot: bigint): void {
 
     if (discEq(data, DISC_CREATE) || discEq(data, DISC_CREATE_V2)) {
       const mint = acc(0);
-      if (mint?.toBase58() === mintStr) noteCreateSeen();
+      if (mint?.toBase58() === mintStr) {
+        noteCreateSeen();
+        touchedMint = true;
+      }
       continue;
     }
 
@@ -111,37 +121,70 @@ export function handleShredTx(tx: VersionedTransaction, slot: bigint): void {
 
     const mint = acc(2);
     if (!mint || mint.toBase58() !== mintStr) continue;
+    touchedMint = true;
 
     const user = acc(6);
     if (!user) continue;
     const userStr = user.toBase58();
 
     if (isBuy) {
+      let tokenAmount: BN;
       if (discEq(data, DISC_BUY)) {
-        const tokenAmount = readU64LE(data, 8);
-        applyBuyTokens(tokenAmount);
-        creditBuy(userStr, tokenAmount);
+        tokenAmount = readU64LE(data, 8);
       } else {
         const solIn = readU64LE(data, 8);
         const curve = live.curve;
-        const tokens = solIn
+        tokenAmount = solIn
           .mul(curve.virtualTokenReserves)
           .div(curve.virtualQuoteReserves.add(solIn));
-        applyBuyTokens(tokens);
-        creditBuy(userStr, tokens);
+      }
+      applyBuyTokens(tokenAmount);
+      const bal = creditBuy(userStr, tokenAmount);
+      if (bal) {
+        console.log(
+          `[balance] BUY ${short(userStr)} +${tokenAmount.toString()} raw → bal=${bal.toString()}`,
+        );
+      } else {
+        console.log(
+          `[watch] buy on mint (other wallet ${short(userStr)}) +${tokenAmount.toString()} raw`,
+        );
       }
     } else {
       const tokenAmount = readU64LE(data, 8);
       applySellTokens(tokenAmount);
-      debitSell(userStr, tokenAmount);
+      const bal = debitSell(userStr, tokenAmount);
+      if (bal !== null) {
+        console.log(
+          `[balance] SELL ${short(userStr)} -${tokenAmount.toString()} raw → bal=${bal.toString()}`,
+        );
+      }
     }
   }
 
+  if (!touchedMint) return;
+
   const mc = solMcFromCurve(live.curve, getGlobal());
+  const now = Date.now();
+  if (
+    Math.abs(mc - lastMcLogged) >= Math.max(0.05, live.targetSolMc * 0.01) ||
+    now - lastMcLog >= 5_000
+  ) {
+    console.log(
+      `[mc] SOL MC ≈ ${mc.toFixed(4)} / target ${live.targetSolMc} (${((mc / live.targetSolMc) * 100).toFixed(1)}%)`,
+    );
+    lastMcLog = now;
+    lastMcLogged = mc;
+  }
+
   if (mc >= live.targetSolMc && !live.fired && !live.firing) {
+    const bals: string[] = [];
+    for (const [addr, bal] of live.balances) {
+      if (bal.gtn(0)) bals.push(`${short(addr)}=${bal.toString()}`);
+    }
     console.log(
       `[trigger] SOL MC ${mc.toFixed(4)} ≥ ${live.targetSolMc} — firing sells`,
     );
+    console.log(`[trigger] holders: ${bals.join(", ") || "(none tracked)"}`);
     const p = fireSells()
       .then(() => undefined)
       .catch((err) => {

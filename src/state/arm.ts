@@ -167,7 +167,10 @@ export async function arm(input: ArmInput): Promise<ArmStatus> {
   };
 
   console.log(
-    `[arm] mint=${live.mintStr} targetSolMc=${live.targetSolMc} wallets=${wallets.length} tip=${config.jitoTipSol}`,
+    `[arm] armed mint=${live.mintStr.slice(0, 8)}…${live.mintStr.slice(-4)} targetSolMc=${live.targetSolMc} wallets=${wallets.length} tip=${config.jitoTipSol}`,
+  );
+  console.log(
+    `[arm] watching ${watched.size} pubkeys — waiting for create/buys on stream…`,
   );
   return getArmStatus();
 }
@@ -179,22 +182,34 @@ export function noteBlockhash(blockhash: string, slot: bigint) {
 }
 
 export function noteCreateSeen() {
-  if (!live) return;
+  if (!live || live.createSeen) return;
   live.createSeen = true;
+  console.log(`[watch] create seen for mint=${live.mintStr}`);
 }
 
-export function creditBuy(owner: string, tokens: BN) {
-  if (!live || tokens.lten(0)) return;
-  if (!live.watched.has(owner)) return;
+/** @returns new balance if this was a watched wallet, else null */
+export function creditBuy(owner: string, tokens: BN): BN | null {
+  if (!live || tokens.lten(0)) return null;
+  if (!live.watched.has(owner)) return null;
   const prev = live.balances.get(owner) ?? new BN(0);
-  live.balances.set(owner, prev.add(tokens));
+  const next = prev.add(tokens);
+  live.balances.set(owner, next);
+  return next;
 }
 
-export function debitSell(owner: string, tokens: BN) {
-  if (!live || tokens.lten(0)) return;
+/** @returns new balance if tracked, else null */
+export function debitSell(owner: string, tokens: BN): BN | null {
+  if (!live || tokens.lten(0)) return null;
+  if (!live.watched.has(owner) && !live.balances.has(owner)) return null;
   const prev = live.balances.get(owner) ?? new BN(0);
+  const next = nextBal(prev, tokens);
+  live.balances.set(owner, next);
+  return next;
+}
+
+function nextBal(prev: BN, tokens: BN): BN {
   const next = prev.sub(tokens);
-  live.balances.set(owner, next.gtn(0) ? next : new BN(0));
+  return next.gtn(0) ? next : new BN(0);
 }
 
 export function applyBuyTokens(tokenAmount: BN) {
