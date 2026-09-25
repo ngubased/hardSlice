@@ -16,7 +16,28 @@ VPS service: **Decoded Shredstream UDP** → watch SOL MC → fire 100% sells (s
 - Mode: **UDP**
 - Destination: `YOUR_VPS_PUBLIC_IP` + `UDP_PORT` (default `8001`)
 
-### One-shot firewall + buffer setup
+### Bootstrap a fresh Ubuntu VPS
+
+```bash
+cd ~/hardSlice
+chmod +x scripts/setup-ubuntu.sh scripts/setup-ufw-shredstream.sh
+sudo ./scripts/setup-ubuntu.sh
+# installs Node 22, npm deps, UFW UDP port, buffer tuning
+```
+
+Only Node/deps (no firewall):
+
+```bash
+sudo SKIP_UFW=1 ./scripts/setup-ubuntu.sh
+```
+
+Allow HardSlice HTTP only from your home IP while bootstrapping:
+
+```bash
+sudo HTTP_ALLOW_FROM=YOUR.HOME.IP ./scripts/setup-ubuntu.sh
+```
+
+### One-shot firewall + buffer setup (already covered by bootstrap)
 
 ```bash
 chmod +x scripts/setup-ufw-shredstream.sh
