@@ -1,14 +1,14 @@
+import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { coldRpc, config } from "../config.js";
 import {
   OnlinePumpSdk,
   newBondingCurve,
   type BondingCurve,
   type FeeConfig,
   type Global,
-} from "@pump-fun/pump-sdk";
-import { TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
-import { coldRpc, config } from "../config.js";
+} from "../sdk.js";
 import { walletKeypairs, walletPubkeySet } from "./wallets.js";
 
 export type ArmStatus =

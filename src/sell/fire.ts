@@ -1,4 +1,3 @@
-import { PUMP_PROGRAM_ID, PUMP_SDK } from "@pump-fun/pump-sdk";
 import {
   ComputeBudgetProgram,
   Keypair,
@@ -9,6 +8,7 @@ import {
 import BN from "bn.js";
 import bs58 from "bs58";
 import { config } from "../config.js";
+import { PUMP_PROGRAM_ID, PUMP_SDK } from "../sdk.js";
 import {
   getGlobal,
   getLiveArm,

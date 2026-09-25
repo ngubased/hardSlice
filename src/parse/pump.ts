@@ -1,4 +1,3 @@
-import { PUMP_PROGRAM_ID } from "@pump-fun/pump-sdk";
 import {
   AddressLookupTableAccount,
   Connection,
@@ -7,6 +6,7 @@ import {
 } from "@solana/web3.js";
 import BN from "bn.js";
 import { coldRpc } from "../config.js";
+import { PUMP_PROGRAM_ID } from "../sdk.js";
 import {
   applyBuyTokens,
   applySellTokens,
