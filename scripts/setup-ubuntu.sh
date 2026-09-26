@@ -15,7 +15,8 @@
 #   NODE_MAJOR=22          # Node.js major version (default 22 LTS)
 #   SKIP_UFW=1             # skip firewall script
 #   UDP_PORT=8001          # passed to ufw script
-#   HTTP_ALLOW_FROM=x.x.x.x
+#   HTTP_PORT=8787         # control API (opened to the world by default)
+#   HTTP_ALLOW_FROM=x.x.x.x  # optional: lock HTTP to one IP instead of anywhere
 
 set -euo pipefail
 
@@ -61,7 +62,9 @@ npm install
 if [[ "$SKIP_UFW" != "1" ]]; then
   echo "==> Firewall + UDP buffers…"
   chmod +x scripts/setup-ufw-shredstream.sh
-  HTTP_ALLOW_FROM="${HTTP_ALLOW_FROM:-}" UDP_PORT="$UDP_PORT" \
+  HTTP_ALLOW_FROM="${HTTP_ALLOW_FROM:-}" \
+  HTTP_PORT="${HTTP_PORT:-8787}" \
+  UDP_PORT="$UDP_PORT" \
     ./scripts/setup-ufw-shredstream.sh "$UDP_PORT"
 else
   echo "==> Skipping UFW (SKIP_UFW=1)"

@@ -41,19 +41,19 @@ sudo HTTP_ALLOW_FROM=YOUR.HOME.IP ./scripts/setup-ubuntu.sh
 
 ```bash
 chmod +x scripts/setup-ufw-shredstream.sh
-# default UDP 8001
+# default: UDP 8001 + HTTP 8787 from anywhere (AUTH_TOKEN still required)
 sudo ./scripts/setup-ufw-shredstream.sh
 
 # custom UDP port
 sudo ./scripts/setup-ufw-shredstream.sh 9001
 
-# also allow HardSlice HTTP API only from your home IP
+# optional: lock HTTP API to your home IP only
 sudo HTTP_ALLOW_FROM=203.0.113.50 ./scripts/setup-ufw-shredstream.sh 8001
 ```
 
-The script: allows SSH, opens `UDP_PORT/udp`, optionally locks HTTP to your IP, enables UFW, and raises `rmem` buffers (Shredstream recommendation).
+The script: allows SSH, opens `UDP_PORT/udp`, opens `HTTP_PORT/tcp` (world by default, or one IP if `HTTP_ALLOW_FROM` is set), enables UFW, and raises `rmem` buffers (Shredstream recommendation).
 
-Also open the same UDP port in any **cloud security group**.
+Also open the same UDP + HTTP ports in any **cloud security group**.
 
 ## Run on VPS
 
